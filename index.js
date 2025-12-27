@@ -71,8 +71,7 @@ function createBot() {
         host: process.env.MC_HOST,
         port: parseInt(process.env.MC_PORT),
         username: process.env.MC_USERNAME,
-        auth: process.env.MC_AUTH,
-        version: '1.21.1' // Force version to avoid Protocol 774 errors
+        auth: process.env.MC_AUTH
     });
 
     bot.loadPlugin(pathfinder);
