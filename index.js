@@ -242,7 +242,7 @@ async function queryGroq(state) {
                 { role: 'system', content: SYSTEM_PROMPT },
                 { role: 'user', content: JSON.stringify(state) }
             ],
-            model: 'llama-3.3-70b-versatile',
+            model: 'llama-3.1-8b-instant', // Free-tier friendly model
             temperature: 0.65,
             response_format: { type: 'json_object' }
         });
