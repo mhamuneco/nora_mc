@@ -76,17 +76,16 @@ Dialect: Warm Egyptian Slang ("يا بطل", "يا هندسة", "عاش") + Acad
 
 function createBot() {
     console.log('[INIT] Launching Nora-OS (Hardened Edition)...');
-    console.log(`[INIT] Connecting to ${process.env.MC_HOST}:${process.env.MC_PORT} as ${process.env.MC_USERNAME}`);
-
     bot = mineflayer.createBot({
         host: process.env.MC_HOST,
         port: parseInt(process.env.MC_PORT),
         username: process.env.MC_USERNAME,
-        auth: process.env.MC_AUTH,
-        version: '1.21.1', // Match server version explicitly
-        hideErrors: false, // Show all errors for debugging
-        checkTimeoutInterval: 60000, // 60 seconds
-        connect: (client) => {
+        auth: process.env.MC_AUTH
+    });
+
+    bot.once('login', () => {
+        console.log('[NET] Login successful');
+        if (bot._client) {
             console.log('[NET] Attempting connection...');
         }
     });
@@ -98,7 +97,7 @@ function createBot() {
         console.log('[SYS] Bot Spawned. Services Active.');
         initPathfinder();
         startAntiAFK();
-        startStuckDetection(); // NEW
+        startStuckDetection();
 
         setTimeout(() => { bot.safeChat('/help'); }, 5000);
         setTimeout(() => { bot.safeChat('/plugins'); }, 6000);
@@ -131,35 +130,18 @@ function createBot() {
         });
     });
 
-    bot.on('kicked', (reason) => {
-        console.log('[KICKED]', reason);
-    });
-
-    bot.on('error', (err) => {
-        console.error('[ERROR]', err.message);
-        if (err.code === 'ECONNREFUSED') {
-            console.error(`[ERROR] Cannot connect to ${process.env.MC_HOST}:${process.env.MC_PORT}`);
-            console.error('[ERROR] Please check:');
-            console.error('  1. Is the Minecraft server running?');
-            console.error('  2. Is the IP address correct?');
-            console.error('  3. Is the port correct?');
-            console.error('  4. Is there a firewall blocking the connection?');
-        }
-    });
-
-    bot.on('end', (reason) => {
-        console.log(`[SYS] Connection Lost. Reason: ${reason || 'Unknown'}`);
-        if (bot._stuckInterval) clearInterval(bot._stuckInterval);
-        console.log(`[SYS] Reconnecting in ${RECONNECT_DELAY / 1000} seconds...`);
+    bot.on('kicked', console.log);
+    bot.on('error', console.log);
+    bot.on('end', () => {
+        console.log(`[SYS] Connection Lost. Rebooting...`);
+        clearInterval(bot._stuckInterval);
         setTimeout(createBot, RECONNECT_DELAY);
     });
 
-    // Helper for safe chat
     bot.safeChat = (msg) => {
-        if (Date.now() - lastChatTime < CHAT_THROTTLE) return; // Rate Limit
+        if (Date.now() - lastChatTime < CHAT_THROTTLE) return;
         if (!msg) return;
 
-        // Command Safety Check
         if (msg.startsWith('/')) {
             const cmdName = msg.split(' ')[0].toLowerCase();
             if (DANGEROUS_COMMANDS.includes(cmdName)) {
@@ -180,8 +162,6 @@ function initPathfinder() {
     bot.pathfinder.setMovements(bot.movements);
 }
 
-// --- Optimization Modules ---
-
 function startAntiAFK() {
     setInterval(() => {
         if (!bot || !bot.entity) return;
@@ -200,15 +180,13 @@ function startStuckDetection() {
         const currentPos = bot.entity.position;
 
         if (lastPosition && currentPos.distanceTo(lastPosition) < 0.2) {
-            // Only count as stuck if we have a path
             if (bot.pathfinder.isMoving()) {
                 samePositionCount++;
-                if (samePositionCount > 5) { // Stuck for 10s
+                if (samePositionCount > 5) {
                     console.log('[NAV] Detected Stuck. Jumping/Resetting.');
                     bot.setControlState('jump', true);
                     bot.clearControlStates();
                     samePositionCount = 0;
-                    // Optional: recalculate path or dig
                 }
             }
         } else {
@@ -217,8 +195,6 @@ function startStuckDetection() {
         lastPosition = currentPos.clone();
     }, 2000);
 }
-
-// --- Memory & Brain ---
 
 function updateShortTermMemory(event) {
     memory.shortTerm.push({ ...event, time: Date.now() });
@@ -266,13 +242,12 @@ async function queryGroq(state) {
                 { role: 'system', content: SYSTEM_PROMPT },
                 { role: 'user', content: JSON.stringify(state) }
             ],
-            model: 'llama3-70b-8192',
+            model: 'llama-3.3-70b-versatile',
             temperature: 0.65,
             response_format: { type: 'json_object' }
         });
         return JSON.parse(completion.choices[0].message.content);
     } catch (error) {
-        // Simple backoff or logging
         console.error('Groq Error (Retrying next loop):', error.message);
         return null;
     }
@@ -327,6 +302,29 @@ async function executeDecision(decision) {
                 if (blockType) {
                     const block = bot.findBlock({ matching: blockType.id, maxDistance: 32 });
                     if (block) bot.collectBlock.collect(block);
+                }
+            }
+            break;
+
+        case 'explore':
+            if (!bot.pathfinder.isMoving()) {
+                const randomX = bot.entity.position.x + (Math.random() * 40 - 20);
+                const randomZ = bot.entity.position.z + (Math.random() * 40 - 20);
+                const randomY = bot.entity.position.y;
+                bot.pathfinder.setGoal(new goals.GoalNear(randomX, randomY, randomZ, 1));
+            }
+            break;
+
+        case 'collect':
+            const valuableBlocks = ['coal_ore', 'iron_ore', 'gold_ore', 'diamond_ore', 'log', 'oak_log'];
+            for (const blockName of valuableBlocks) {
+                const blockType = bot.registry.blocksByName[blockName];
+                if (blockType) {
+                    const block = bot.findBlock({ matching: blockType.id, maxDistance: 16 });
+                    if (block) {
+                        bot.collectBlock.collect(block);
+                        break;
+                    }
                 }
             }
             break;
