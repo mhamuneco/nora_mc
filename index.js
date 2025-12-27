@@ -7,8 +7,22 @@ const express = require('express');
 const app = express();
 
 // --- Configuration ---
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+// Multiple API Keys for rotation
+const API_KEYS = [
+    'AIzaSyBaUsiLQj_LiqbZDbaXaV2T00akXdSgv4Y',
+    'AIzaSyDOi-fj0RjpWD1nsWab3ff15frxI8sWY3Y',
+    'AIzaSyCtGfd26kDTlpkfUOBaoZjenHsitxwq9no',
+    'AIzaSyCZdbfJ2L6s42VGZkaZ3v0JGKnssEDAi-E',
+    'AIzaSyDVLUvZr1tHsoA3He8C0N44n0DUz2GiOCo'
+];
+let currentKeyIndex = 0;
+
+function getGeminiModel() {
+    const genAI = new GoogleGenerativeAI(API_KEYS[currentKeyIndex]);
+    return genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+}
+
+let model = getGeminiModel();
 const PORT = process.env.PORT || 10000;
 const RECONNECT_DELAY = 10000;
 const BRAIN_INTERVAL = 5000; // 5 seconds for faster decisions
