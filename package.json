@@ -20,10 +20,11 @@
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
     "groq-sdk": "^0.3.3",
-    "mineflayer": "latest",
+    "minecraft-data": "latest",
+    "minecraft-protocol": "^1.62.0",
+    "mineflayer": "^4.33.0",
     "mineflayer-collectblock": "^1.5.0",
-    "mineflayer-pathfinder": "latest",
-    "minecraft-data": "latest"
+    "mineflayer-pathfinder": "latest"
   },
   "engines": {
     "node": ">=18.0.0"

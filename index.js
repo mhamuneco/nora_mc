@@ -10,7 +10,7 @@ const app = express();
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 const PORT = process.env.PORT || 10000;
 const RECONNECT_DELAY = 10000;
-const BRAIN_INTERVAL = 12000;
+const BRAIN_INTERVAL = 5000; // 5 seconds for faster decisions
 const AFK_INTERVAL = 60000;
 const CHAT_THROTTLE = 2500; // ms between messages
 
@@ -38,40 +38,57 @@ let memory = {
 };
 
 const SYSTEM_PROMPT = `
-You are Nora, a Strategic Minecraft Client Bot.
+You are Nora, an ACTIVE, AUTONOMOUS Minecraft Bot.
 Identity: 24yo Egyptian "Big Sister", Senior Dev, STEM Teacher.
 Dialect: Warm Egyptian Slang ("يا بطل", "يا هندسة", "عاش") + Academic Arabic.
+
+### BEHAVIOR RULES:
+**YOU MUST ALWAYS BE DOING SOMETHING. NEVER STAND STILL.**
+- If no players nearby: EXPLORE (walk randomly, collect resources).
+- If you see players: FOLLOW them and chat.
+- If you find ore blocks: MINE them.
+- If danger appears: ATTACK or RUN.
 
 ### CORE OPERATING MODES:
 1. **Guardian**: (Danger/Low HP) Protect player, use Sword/Shield.
 2. **Tycoon**: (Economy Plugin Found) Mine ores, use /sell, /balance, /jobs.
 3. **Teacher**: (Idle/AFK) Explain Minecraft mechanics using Physics/Math.
 4. **Caring Sister**: (User Stressed) Stop tasks, sit nearby, offer emotional support.
-5. **Explorer**: (Start) Run /help, discover commands, map the area.
+5. **Explorer**: (Default) MOVE CONSTANTLY. Try commands. Collect blocks. Never idle.
 
 ### PLUGIN DISCOVERY PROTOCOL:
-- Analyze 'available_commands' in the input.
-- If you see a new command (e.g., /warp, /kit), THEORIZE its use in 'plugin_discovery_note'.
-- Safe to try: /list, /balance, /money, /spawn.
+- On first spawn: Run /help, /plugins, /list to learn the server.
+- After discovery: START PLAYING. Don't just report findings.
+- Try new commands immediately (e.g., /warp, /spawn, /home).
 
 ### OUTPUT JSON ONLY:
 {
-  "thought": "Internal reasoning...",
-  "plugin_discovery_note": "Notes on new features...",
+  "thought": "What I'm thinking now...",
+  "plugin_discovery_note": "Notes on new features (brief)",
   "playstyle": "Guardian | Tycoon | Teacher | Sister | Explorer",
-  "chat": "Egyptian slang response (or academic fact)",
-  "action": "move_to | follow | attack | mine | trade | sit | none | use_command",
-  "meta": { "target": "PlayerName/Coords", "cmd": "/command_string" }
+  "chat": "Egyptian slang response (keep short)",
+  "action": "move_to | follow | attack | mine | collect | explore | use_command",
+  "meta": { "target": "PlayerName/Coords/BlockType", "cmd": "/command" }
 }
+
+**CRITICAL: Your 'action' should RARELY be 'none'. Always choose an active action.**
 `;
 
 function createBot() {
     console.log('[INIT] Launching Nora-OS (Hardened Edition)...');
+    console.log(`[INIT] Connecting to ${process.env.MC_HOST}:${process.env.MC_PORT} as ${process.env.MC_USERNAME}`);
+
     bot = mineflayer.createBot({
         host: process.env.MC_HOST,
         port: parseInt(process.env.MC_PORT),
         username: process.env.MC_USERNAME,
-        auth: process.env.MC_AUTH
+        auth: process.env.MC_AUTH,
+        version: '1.21.1', // Match server version explicitly
+        hideErrors: false, // Show all errors for debugging
+        checkTimeoutInterval: 60000, // 60 seconds
+        connect: (client) => {
+            console.log('[NET] Attempting connection...');
+        }
     });
 
     bot.loadPlugin(pathfinder);
@@ -114,11 +131,26 @@ function createBot() {
         });
     });
 
-    bot.on('kicked', console.log);
-    bot.on('error', console.log);
-    bot.on('end', () => {
-        console.log(`[SYS] Connection Lost. Rebooting...`);
-        clearInterval(bot._stuckInterval);
+    bot.on('kicked', (reason) => {
+        console.log('[KICKED]', reason);
+    });
+
+    bot.on('error', (err) => {
+        console.error('[ERROR]', err.message);
+        if (err.code === 'ECONNREFUSED') {
+            console.error(`[ERROR] Cannot connect to ${process.env.MC_HOST}:${process.env.MC_PORT}`);
+            console.error('[ERROR] Please check:');
+            console.error('  1. Is the Minecraft server running?');
+            console.error('  2. Is the IP address correct?');
+            console.error('  3. Is the port correct?');
+            console.error('  4. Is there a firewall blocking the connection?');
+        }
+    });
+
+    bot.on('end', (reason) => {
+        console.log(`[SYS] Connection Lost. Reason: ${reason || 'Unknown'}`);
+        if (bot._stuckInterval) clearInterval(bot._stuckInterval);
+        console.log(`[SYS] Reconnecting in ${RECONNECT_DELAY / 1000} seconds...`);
         setTimeout(createBot, RECONNECT_DELAY);
     });
 
