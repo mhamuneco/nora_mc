@@ -2,12 +2,13 @@ require('dotenv').config();
 const mineflayer = require('mineflayer');
 const { pathfinder, Movements, goals } = require('mineflayer-pathfinder');
 const collectBlock = require('mineflayer-collectblock').plugin;
-const Groq = require('groq-sdk');
+const { GoogleGenerativeAI } = require('@google/generative-ai');
 const express = require('express');
 const app = express();
 
 // --- Configuration ---
-const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
 const PORT = process.env.PORT || 10000;
 const RECONNECT_DELAY = 10000;
 const BRAIN_INTERVAL = 5000; // 5 seconds for faster decisions
@@ -213,7 +214,7 @@ async function startBrainLoop() {
 
         const state = gatherWorldState();
         try {
-            const decision = await queryGroq(state);
+            const decision = await queryGemini(state);
             if (decision) await executeDecision(decision);
         } catch (e) {
             console.error('[BRAIN] API Error:', e.message);
@@ -235,20 +236,18 @@ function gatherWorldState() {
     };
 }
 
-async function queryGroq(state) {
+async function queryGemini(state) {
     try {
-        const completion = await groq.chat.completions.create({
-            messages: [
-                { role: 'system', content: SYSTEM_PROMPT },
-                { role: 'user', content: JSON.stringify(state) }
-            ],
-            model: 'llama-3.1-8b-instant', // Free-tier friendly model
-            temperature: 0.65,
-            response_format: { type: 'json_object' }
-        });
-        return JSON.parse(completion.choices[0].message.content);
+        const prompt = `${SYSTEM_PROMPT}\n\nCurrent State:\n${JSON.stringify(state)}\n\nRespond ONLY with valid JSON.`;
+        const result = await model.generateContent(prompt);
+        const response = await result.response;
+        const text = response.text();
+
+        // Extract JSON from markdown code blocks if present
+        const jsonMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/) || [null, text];
+        return JSON.parse(jsonMatch[1].trim());
     } catch (error) {
-        console.error('Groq Error (Retrying next loop):', error.message);
+        console.error('Gemini Error (Retrying next loop):', error.message);
         return null;
     }
 }

@@ -11,7 +11,7 @@
     "bot",
     "ai",
     "mineflayer",
-    "groq",
+    "gemini",
     "autonomous"
   ],
   "author": "",
@@ -19,7 +19,7 @@
   "dependencies": {
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
-    "groq-sdk": "^0.3.3",
+    "@google/generative-ai": "^0.21.0",
     "minecraft-data": "latest",
     "minecraft-protocol": "^1.62.0",
     "mineflayer": "^4.33.0",
